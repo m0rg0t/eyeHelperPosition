@@ -3,54 +3,8 @@ var app = express();
 var path = require('path');
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var querystring = require('querystring');
 var unirest = require('unirest');
 
-function PostCode(codestring) {
-
-    unirest.post('https://eyehelperposition.azure-mobile.net/tables/Statistic')
-      .header({ "Accept": "application/json", "X-ZUMO-APPLICATION": 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20' })
-      .send({ "text": "Hello World!" })
-      .end(function (response) {
-          console.log(response.body);
-      });
-
-    /*  
-    // Build the post string from an object
-    var post_data = querystring.stringify({
-        'compilation_level' : 'ADVANCED_OPTIMIZATIONS',
-        'output_format': 'json',
-        'output_info': 'compiled_code',
-          'warning_level' : 'QUIET',
-          'js_code' : codestring
-    });
-  
-    // An object of options to indicate where to post to
-    var post_options = {
-        host: 'eyehelperposition.azure-mobile.net',
-        port: '81',
-        path: '/tables/Service',
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(post_data),
-            'X-ZUMO-APPLICATION': 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20'
-        }
-    };
-  
-    // Set up the request
-    var post_req = http.request(post_options, function(res) {
-        res.setEncoding('utf8');
-        res.on('data', function (chunk) {
-            console.log('Response: ' + chunk);
-        });
-    });
-  
-    // post the data
-    post_req.write(post_data);
-    post_req.end();*/
-
-}
 
 // configure jshint
 /*jslint node:true, vars:true, bitwise:true, unparam:true */
@@ -63,9 +17,10 @@ var useUpmVersion = true;
 var mraa = require('mraa');
 var version = mraa.getVersion();
 
-PostCode(1);
+
 
 var InfoControl = {
+    mac: "", //intel edison mac address
     init: function () {
         if (version >= 'v0.6.1') {
             console.log('mraa version (' + version + ') ok');
@@ -94,12 +49,46 @@ var InfoControl = {
 
         DeviceControl.touchButton.init();
         DeviceControl.redLed.init();
-        DeviceControl.buzzer.init();
-
-        
-        
+        DeviceControl.buzzer.init();        
+    },
+    statistics: {
+        tick: 10,
+        sendStat: function (statItem) {
+            unirest.post('https://eyehelperposition.azure-mobile.net/tables/Statistic')
+              .header({ "Accept": "application/json", "X-ZUMO-APPLICATION": 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20' })
+              .send(statItem)
+              .end(function (response) {
+                  console.log(response.body);
+              });
+        },
+        interval: null,
+        createItem: function (duration, pressed) {
+            if (InfoControl.statistics.item === null) {
+                if ((pressed === undefined) || (pressed === null)) {
+                    pressed = false;
+                }
+                InfoControl.statistics.item = { "duration": duration, "pressed": pressed, "deviceId": InfoControl.mac };
+                console.log("InfoControl.statistics.item", InfoControl.statistics.item);
+                //InfoControl.statistics.createItem(0, DeviceControl.touchButton.getValue());
+                InfoControl.statistics.interval = setInterval(InfoControl.statistics.updateItem, InfoControl.statistics.tick);
+            }
+        },
+        updateItem: function () {
+            InfoControl.statistics.item.duration += InfoControl.statistics.tick;
+            if (DeviceControl.touchButton.getValue() == 1) {
+                InfoControl.statistics.item.pressed = 1;
+            }
+        },
+        stopUpdateItem: function() {
+            clearInterval(InfoControl.statistics.interval);
+            var date = new Date();
+            InfoControl.statistics.item.created = date.getDate() + "-" + (date.getMonth() + 1) + "-" + date.getFullYear() + " " + date.getHours() + ":00";
+            InfoControl.statistics.sendStat(InfoControl.statistics.item);
+            InfoControl.statistics.item = null;
+        },
+        item: null
     }
-}
+};
 
 var distanceProto = {
     distance: null,
@@ -112,10 +101,11 @@ var distanceProto = {
         this.previousDistance = false;
     },
     previousDistance: false
-}
+};
 
 var DeviceControl = {
     distance: {
+        previousAlreadyDistance: false,
         alreadyDistance: false,
         firstDistance: {},
         secondDistance: {},
@@ -136,7 +126,6 @@ var DeviceControl = {
                 DeviceControl.display.setRedColor();
                 DeviceControl.display.display.setCursor(0, 1);
 
-                console.log(DeviceControl.touchButton.getValue());
                 DeviceControl.distance.alreadyDistance = true;
             }
             else {
@@ -160,7 +149,7 @@ var DeviceControl = {
         periodicBuzzerActivity: function (manual) {
             //manual = 0;
             if ((manual === null) && (manual === undefined)) {
-                DeviceControl.buzzer.buzzer.write(buzzerState ? 1 : 0); // установим сигнал по состоянию
+                DeviceControl.buzzer.buzzer.write(DeviceControl.buzzer.buzzerState ? 1 : 0); // установим сигнал по состоянию
                 //buzzerState = !buzzerState;
             } else {
                 DeviceControl.buzzer.buzzerState = manual;
@@ -169,7 +158,7 @@ var DeviceControl = {
         },
         periodicMainBuzzerActivity: function () {
             DeviceControl.buzzer.periodicBuzzerActivity(1);
-            setInterval(function () { DeviceControl.buzzer.periodicBuzzerActivity(0) }, 150);
+            setInterval(function () { DeviceControl.buzzer.periodicBuzzerActivity(0); }, 150);
         }
     },
     redLed: {
@@ -224,6 +213,9 @@ var DeviceControl = {
         setRedColor: function () {
             DeviceControl.display.display.setColor(255, 0, 0);
         },
+        setGreenColor: function () {
+            DeviceControl.display.display.setColor(0, 255, 0);
+        },
         setBlueColor: function () {
             DeviceControl.display.display.setColor(0, 0, 255);
         },
@@ -252,7 +244,14 @@ var DeviceControl = {
     }
 };
 
-InfoControl.init();
+require('getmac').getMac(function (err, macAddress) {
+    if (err) { }
+    console.log("macAddress", macAddress);
+    InfoControl.mac = macAddress;
+
+    InfoControl.init();
+});
+
 
 
 
@@ -260,11 +259,32 @@ function periodicLightActivity() {
     DeviceControl.redLed.led.write(DeviceControl.redLed.ledState ? 1 : 0); // установим сигнал по состоянию
     DeviceControl.redLed.ledState = !DeviceControl.redLed.ledState; // изменим состояние на обратное   
 
-    if (DeviceControl.distance.alreadyDistance == false) {
+    if (DeviceControl.distance.alreadyDistance === false) {
         DeviceControl.distance.checkDistance(DeviceControl.distance.firstDistance, "detect left");
     }
-    if (DeviceControl.distance.alreadyDistance == false) {
+    if (DeviceControl.distance.alreadyDistance === false) {
         DeviceControl.distance.checkDistance(DeviceControl.distance.secondDistance, "detect right");
+    }
+
+    if (DeviceControl.touchButton.getValue() == 1) {
+        var interval = setInterval(function () { DeviceControl.display.setGreenColor(); }, 10);
+        setTimeout(function () {
+            clearInterval(interval);
+        }, 400);
+        DeviceControl.display.setGreenColor();
+    }
+
+    //console.log("DeviceControl.distance.alreadyDistance", DeviceControl.distance.alreadyDistance);
+    if ((DeviceControl.distance.alreadyDistance) && (DeviceControl.distance.previousAlreadyDistance === false)) {
+
+        DeviceControl.distance.previousAlreadyDistance = true;
+        
+        InfoControl.statistics.createItem(0, DeviceControl.touchButton.getValue());
+    } else {
+        if (DeviceControl.distance.previousAlreadyDistance !== DeviceControl.distance.alreadyDistance) {
+            InfoControl.statistics.stopUpdateItem(); //(InfoControl.statistics.item);
+            DeviceControl.distance.previousAlreadyDistance = false;
+        }
     }
     DeviceControl.distance.alreadyDistance = false;
 }
@@ -272,11 +292,11 @@ function periodicLightActivity() {
 
 
 
-var exit = function (process) {
+/*var exit = function (process) {
     DeviceControl.buzzer.periodicBuzzerActivity(0);
     console.log("Exiting...");
     process.exit(0);
-};
+};*/
 
 /*process.on('SIGINT', function () {
     exit(process);
