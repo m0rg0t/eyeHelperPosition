@@ -1,0 +1,60 @@
+{
+  "project": {
+    "projectSettingsVersion": "2.0.0",
+    "initialAutoPluginCount": 0,
+    "currentBuildConfiguration": null,
+    "projectFiles": {},
+    "projectDirectories": {}
+  },
+  "iot-tab": {
+    "fileStatus": {
+      "EyeHelperPosition.xdk": {
+        "previousModTime": 1447488072236,
+        "modified": 1447488072236,
+        "seen": true,
+        "name": "EyeHelperPosition.xdk"
+      },
+      "EyeHelperPosition.xdke": {
+        "previousModTime": 1447511076048,
+        "modified": 1447511076048,
+        "seen": true,
+        "name": "EyeHelperPosition.xdke"
+      },
+      "lcd.js": {
+        "previousModTime": 1447488071985,
+        "modified": 1447488071985,
+        "seen": true,
+        "name": "lcd.js"
+      },
+      "main.js": {
+        "previousModTime": 1447511088841,
+        "modified": 1447511088841,
+        "seen": true,
+        "name": "main.js"
+      },
+      "package.json": {
+        "previousModTime": 1447506700765,
+        "modified": 1447506700765,
+        "seen": true,
+        "name": "package.json"
+      },
+      "README.md": {
+        "previousModTime": 1447488071986,
+        "modified": 1447488071986,
+        "seen": true,
+        "name": "README.md"
+      },
+      "xdk/project-info.json": {
+        "previousModTime": 1447488072214,
+        "modified": 1447488072214,
+        "seen": true,
+        "name": "xdk/project-info.json"
+      }
+    },
+    "boardFileStatus": {
+      "main.js": {
+        "previousModTime": 1447511092342
+      }
+    }
+  }
+}
