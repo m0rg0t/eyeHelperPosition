@@ -7,48 +7,48 @@ var querystring = require('querystring');
 var unirest = require('unirest');
 
 function PostCode(codestring) {
-    
-  unirest.post('https://eyehelperposition.azure-mobile.net/tables/Statistic')
-    .header({"Accept": "application/json", "X-ZUMO-APPLICATION": 'SJfSYDKpwxSnFpbksyCchOlVkuUIHe74'})
-    .send({ "text": "Hello World!" })
-    .end(function (response) {
-      console.log(response.body);
-    });
 
-  /*  
-  // Build the post string from an object
-  var post_data = querystring.stringify({
-      'compilation_level' : 'ADVANCED_OPTIMIZATIONS',
-      'output_format': 'json',
-      'output_info': 'compiled_code',
-        'warning_level' : 'QUIET',
-        'js_code' : codestring
-  });
-
-  // An object of options to indicate where to post to
-  var post_options = {
-      host: 'eyehelperposition.azure-mobile.net',
-      port: '81',
-      path: '/tables/Service',
-      method: 'POST',
-      headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(post_data),
-          'X-ZUMO-APPLICATION': 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20'
-      }
-  };
-
-  // Set up the request
-  var post_req = http.request(post_options, function(res) {
-      res.setEncoding('utf8');
-      res.on('data', function (chunk) {
-          console.log('Response: ' + chunk);
+    unirest.post('https://eyehelperposition.azure-mobile.net/tables/Statistic')
+      .header({ "Accept": "application/json", "X-ZUMO-APPLICATION": 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20' })
+      .send({ "text": "Hello World!" })
+      .end(function (response) {
+          console.log(response.body);
       });
-  });
 
-  // post the data
-  post_req.write(post_data);
-  post_req.end();*/
+    /*  
+    // Build the post string from an object
+    var post_data = querystring.stringify({
+        'compilation_level' : 'ADVANCED_OPTIMIZATIONS',
+        'output_format': 'json',
+        'output_info': 'compiled_code',
+          'warning_level' : 'QUIET',
+          'js_code' : codestring
+    });
+  
+    // An object of options to indicate where to post to
+    var post_options = {
+        host: 'eyehelperposition.azure-mobile.net',
+        port: '81',
+        path: '/tables/Service',
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(post_data),
+            'X-ZUMO-APPLICATION': 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20'
+        }
+    };
+  
+    // Set up the request
+    var post_req = http.request(post_options, function(res) {
+        res.setEncoding('utf8');
+        res.on('data', function (chunk) {
+            console.log('Response: ' + chunk);
+        });
+    });
+  
+    // post the data
+    post_req.write(post_data);
+    post_req.end();*/
 
 }
 
@@ -65,7 +65,133 @@ var version = mraa.getVersion();
 
 PostCode(1);
 
+var InfoControl = {
+    init: function () {
+        if (version >= 'v0.6.1') {
+            console.log('mraa version (' + version + ') ok');
+        }
+        else {
+            console.log('meaa version(' + version + ') is old - this code may not work');
+        }
+
+        if (useUpmVersion) {
+            DeviceControl.display.useUpm();
+        }
+        else {
+            DeviceControl.display.useLcd();
+        }
+
+        DeviceControl.distance.firstDistance.__proto__ = distanceProto;
+        DeviceControl.distance.firstDistance.init();
+
+        DeviceControl.distance.secondDistance.__proto__ = distanceProto;
+        DeviceControl.distance.secondDistance.init(7);
+
+        // Будем вызывать функцию через каждые 100 мс
+        setInterval(periodicLightActivity, 50);
+        setInterval(DeviceControl.buzzer.periodicBuzzerActivity, 100);
+        setInterval(DeviceControl.buzzer.periodicMainBuzzerActivity, 2000);
+
+        DeviceControl.touchButton.init();
+        DeviceControl.redLed.init();
+        DeviceControl.buzzer.init();
+
+        
+        
+    }
+}
+
+var distanceProto = {
+    distance: null,
+    init: function (id) {
+        if ((id === null) || (id === undefined)) {
+            id = 2;
+        }
+        var distanceInit = require('jsupm_rfr359f');
+        this.distance = new distanceInit.RFR359F(id);
+        this.previousDistance = false;
+    },
+    previousDistance: false
+}
+
 var DeviceControl = {
+    distance: {
+        alreadyDistance: false,
+        firstDistance: {},
+        secondDistance: {},
+        checkDistance: function (distance, detectedText) {
+            if ((detectedText === null) || (detectedText === undefined)) {
+                detectedText = "detected";
+            }
+
+            DeviceControl.display.display.setCursor(0, 0);
+
+            if (distance.previousDistance !== distance.distance.objectDetected()) {
+                DeviceControl.display.clearScreen();
+            }
+
+            if (distance.distance.objectDetected()) {
+                DeviceControl.display.display.write(detectedText);
+                DeviceControl.buzzer.periodicBuzzerActivity(1);
+                DeviceControl.display.setRedColor();
+                DeviceControl.display.display.setCursor(0, 1);
+
+                console.log(DeviceControl.touchButton.getValue());
+                DeviceControl.distance.alreadyDistance = true;
+            }
+            else {
+                DeviceControl.buzzer.periodicBuzzerActivity(0);
+                DeviceControl.display.display.write("none");
+                DeviceControl.display.setBlueColor();
+            }
+
+            distance.previousDistance = distance.distance.objectDetected();
+        }
+    },
+    buzzer: {
+        buzzer: null,
+        init: function () {
+            DeviceControl.buzzer.buzzer = new mraa.Gpio(3);
+
+            DeviceControl.buzzer.buzzer.dir(mraa.DIR_OUT);
+            DeviceControl.buzzer.buzzerState = true;
+        },
+        buzzState: true,
+        periodicBuzzerActivity: function (manual) {
+            //manual = 0;
+            if ((manual === null) && (manual === undefined)) {
+                DeviceControl.buzzer.buzzer.write(buzzerState ? 1 : 0); // установим сигнал по состоянию
+                //buzzerState = !buzzerState;
+            } else {
+                DeviceControl.buzzer.buzzerState = manual;
+                DeviceControl.buzzer.buzzer.write(manual ? 1 : 0);
+            }
+        },
+        periodicMainBuzzerActivity: function () {
+            DeviceControl.buzzer.periodicBuzzerActivity(1);
+            setInterval(function () { DeviceControl.buzzer.periodicBuzzerActivity(0) }, 150);
+        }
+    },
+    redLed: {
+        led: null,
+        init: function () {
+            DeviceControl.redLed.led = new mraa.Gpio(4);
+            DeviceControl.redLed.led.dir(mraa.DIR_OUT);
+        },
+        ledState: true, //Текущее состояние светодиода
+    },
+    touchButton: {
+        //init touch button for reading
+        init: function () {
+            DeviceControl.touchButton.touchButton = new mraa.Gpio(8);
+            DeviceControl.touchButton.touchButton.dir(mraa.DIR_IN);
+        },
+        getValue: function () {
+            var touch_sensor_value = DeviceControl.touchButton.touchButton.read();
+            return touch_sensor_value;
+        },
+        touchButton: null
+    },
     display: {
         display: null,
         clearScreen: function () {
@@ -95,10 +221,10 @@ var DeviceControl = {
                 DeviceControl.display.display.clearError();
             });
         },
-        setRedColor: function() {
+        setRedColor: function () {
             DeviceControl.display.display.setColor(255, 0, 0);
         },
-        setBlueColor: function() {
+        setBlueColor: function () {
             DeviceControl.display.display.setColor(0, 0, 255);
         },
         rotateColors: function () {
@@ -126,112 +252,38 @@ var DeviceControl = {
     }
 };
 
-
-if (version >= 'v0.6.1') {
-    console.log('mraa version (' + version + ') ok');
-}
-else {
-    console.log('meaa version(' + version + ') is old - this code may not work');
-}
-
-if (useUpmVersion) {
-    DeviceControl.display.useUpm();
-}
-else {
-    DeviceControl.display.useLcd();
-}
-
-// Инициализируем D2 вывод как цифровой выход
-var myOnboardLed = new mraa.Gpio(4);
-var myBuzzer = new mraa.Gpio(3);
-
-// Настроим на вывод
-myOnboardLed.dir(mraa.DIR_OUT);
-var ledState = true; //Текущее состояние светодиода
-
-myBuzzer.dir(mraa.DIR_OUT);
-var buzzerState = true;
-
-var distance = require('jsupm_rfr359f');
-var distance1 = new distance.RFR359F(2);
-var previousDistance1 = false;
-
-//TODO: find way to work with 4 touch sensors
-/*var touchSensor = require('jsupm_mpr121');
-var myTouchSensor = new touchSensor.MPR121(touchSensor.MPR121_I2C_BUS, touchSensor.MPR121_DEFAULT_I2C_ADDR);
-myTouchSensor.configAN3944();
-console.log(touchSensor.MPR121_I2C_BUS);
-console.log(touchSensor.MPR121_DEFAULT_I2C_ADDR);*/
+InfoControl.init();
 
 
-// Будем вызывать функцию через каждые 100 мс
-setInterval(periodicLightActivity, 50);
-setInterval(periodicBuzzerActivity, 100);
-
-var digital_pin_D2 = new mraa.Gpio(8);
-digital_pin_D2.dir(mraa.DIR_IN);
 
 function periodicLightActivity() {
-    myOnboardLed.write(ledState ? 1 : 0); // установим сигнал по состоянию
-    ledState = !ledState; // изменим состояние на обратное   
+    DeviceControl.redLed.led.write(DeviceControl.redLed.ledState ? 1 : 0); // установим сигнал по состоянию
+    DeviceControl.redLed.ledState = !DeviceControl.redLed.ledState; // изменим состояние на обратное   
 
-    DeviceControl.display.display.setCursor(0, 0);
-
-    if (previousDistance1 !== distance1.objectDetected()) {
-        DeviceControl.display.clearScreen();
+    if (DeviceControl.distance.alreadyDistance == false) {
+        DeviceControl.distance.checkDistance(DeviceControl.distance.firstDistance, "detect left");
     }
-
-    if (distance1.objectDetected()) {
-        DeviceControl.display.display.write("detected");
-        periodicBuzzerActivity(1);
-
-        DeviceControl.display.setRedColor();
-
-        DeviceControl.display.display.setCursor(0, 1);
-
-        //var analogPin0 = new mraa.Aio(2); //setup access analog input Analog pin #0 (A0)
-        //var analogValue = analogPin0.read(); //read the value of the analog pin
-        //console.log(digital_pin_D2.read()); //write the value of the analog pin to the console
-        var touch_sensor_value = digital_pin_D2.read();
-        console.log(touch_sensor_value);
-        //DeviceControl.display.display.write(touch_sensor_value);
+    if (DeviceControl.distance.alreadyDistance == false) {
+        DeviceControl.distance.checkDistance(DeviceControl.distance.secondDistance, "detect right");
     }
-    else {
-        periodicBuzzerActivity(0);
-        DeviceControl.display.display.write("none");
-        DeviceControl.display.setBlueColor();
-    }
-
-    previousDistance1 = distance1.objectDetected();
+    DeviceControl.distance.alreadyDistance = false;
 }
 
-function periodicBuzzerActivity(manual) {
-    //manual = 0;
-    if ((manual === null) && (manual === undefined)) {
-        myBuzzer.write(buzzerState ? 1 : 0); // установим сигнал по состоянию
-        //buzzerState = !buzzerState; // изменим состояние на обратное
-    } else {
-        buzzerState = manual;
-        myBuzzer.write(manual ? 1 : 0);
-    }
-}
+
 
 
 var exit = function (process) {
-    periodicBuzzerActivity(0);
-
+    DeviceControl.buzzer.periodicBuzzerActivity(0);
     console.log("Exiting...");
     process.exit(0);
 };
 
-//process.on('SIGINT', function () {
-//    exit(process);
-//});
-
-/*process.on('exit', function () {
+/*process.on('SIGINT', function () {
+    exit(process);
+});
+process.on('exit', function () {
     exit(process);
 });*/
-
 
 
 var connectedUsersArray = [];
@@ -276,9 +328,9 @@ io.on('connection', function (socket) {
 
     socket.on('toogle led', function (msg) {
         //myOnboardLed.write(ledState ? 1 : 0); //if ledState is true then write a '1' (high) otherwise write a '0' (low)
-        msg.value = ledState;
+        msg.value = DeviceControl.redLed.ledState;
         io.emit('toogle led', msg);
-        ledState = !ledState; //invert the ledState
+        DeviceControl.redLed.ledState = !DeviceControl.redLed.ledState; //invert the ledState
     });
 
 });
