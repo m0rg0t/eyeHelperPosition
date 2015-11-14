@@ -8,6 +8,13 @@
   },
   "dependencies": {
     "q": "latest",
-    "cylon-intel-iot": "latest"
+    "cylon-intel-iot": "latest",
+      "express": "latest",
+      "path": "latest",
+      "http": "latest",
+      "socket.io": "latest",
+      "azure": "latest",
+      "querystring": "latest",
+      "unirest": "latest"
   }
 }

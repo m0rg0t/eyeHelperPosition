@@ -1,14 +1,56 @@
-// Drive the Grive RGB LCD (a JHD1313m1)
-// We can do this in either of two ways
-//
-// The bext way is to use the upm library. which
-// contains support for this device
-//
-// The alternative way is to drive the LCD directly from
-// Javascript code using the i2c interface directly
-// This approach is useful for learning about using
-// the i2c bus. The lcd file is an implementation
-// in Javascript for some of the common LCD functions
+var express = require('express');
+var app = express();
+var path = require('path');
+var http = require('http').Server(app);
+var io = require('socket.io')(http);
+var querystring = require('querystring');
+var unirest = require('unirest');
+
+function PostCode(codestring) {
+    
+  unirest.post('https://eyehelperposition.azure-mobile.net/tables/Statistic')
+    .header({"Accept": "application/json", "X-ZUMO-APPLICATION": 'SJfSYDKpwxSnFpbksyCchOlVkuUIHe74'})
+    .send({ "text": "Hello World!" })
+    .end(function (response) {
+      console.log(response.body);
+    });
+
+  /*  
+  // Build the post string from an object
+  var post_data = querystring.stringify({
+      'compilation_level' : 'ADVANCED_OPTIMIZATIONS',
+      'output_format': 'json',
+      'output_info': 'compiled_code',
+        'warning_level' : 'QUIET',
+        'js_code' : codestring
+  });
+
+  // An object of options to indicate where to post to
+  var post_options = {
+      host: 'eyehelperposition.azure-mobile.net',
+      port: '81',
+      path: '/tables/Service',
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(post_data),
+          'X-ZUMO-APPLICATION': 'omWGsXHwcNMFGeFxZgTuWsbCLKqCLg20'
+      }
+  };
+
+  // Set up the request
+  var post_req = http.request(post_options, function(res) {
+      res.setEncoding('utf8');
+      res.on('data', function (chunk) {
+          console.log('Response: ' + chunk);
+      });
+  });
+
+  // post the data
+  post_req.write(post_data);
+  post_req.end();*/
+
+}
 
 // configure jshint
 /*jslint node:true, vars:true, bitwise:true, unparam:true */
@@ -20,6 +62,8 @@ var useUpmVersion = true;
 // we want mraa to be at least version 0.6.1
 var mraa = require('mraa');
 var version = mraa.getVersion();
+
+PostCode(1);
 
 var DeviceControl = {
     display: {
@@ -108,43 +152,17 @@ var ledState = true; //Текущее состояние светодиода
 myBuzzer.dir(mraa.DIR_OUT);
 var buzzerState = true;
 
-//RFR359F
-//var distance1 = new mraa.Gpio(2);
 var distance = require('jsupm_rfr359f');
 var distance1 = new distance.RFR359F(2);
 var previousDistance1 = false;
 
-var touchSensor = require('jsupm_mpr121');
-
-//var myTouchSensor = new touchSensor.MPR121(touchSensor.MPR121_I2C_BUS, touchSensor.MPR121_DEFAULT_I2C_ADDR);
-//myTouchSensor.configAN3944();
+//TODO: find way to work with 4 touch sensors
+/*var touchSensor = require('jsupm_mpr121');
+var myTouchSensor = new touchSensor.MPR121(touchSensor.MPR121_I2C_BUS, touchSensor.MPR121_DEFAULT_I2C_ADDR);
+myTouchSensor.configAN3944();
 console.log(touchSensor.MPR121_I2C_BUS);
-console.log(touchSensor.MPR121_DEFAULT_I2C_ADDR);
+console.log(touchSensor.MPR121_DEFAULT_I2C_ADDR);*/
 
-setInterval(function () {
-    //myTouchSensor.readButtons();
-    //printButtons(myTouchSensor);
-}, 1000);
-
-function printButtons(touchSensor) {
-    var buttonPressed = false;
-
-    var outputStr = "Buttons Pressed: ";
-    for (var i = 0; i < 12; i++) {
-        if (touchSensor.m_buttonStates & (1 << i)) {
-            outputStr += (i + " ");
-            buttonPressed = true;
-        }
-    }
-
-    if (!buttonPressed)
-        outputStr += "None";
-
-    console.log(outputStr);
-
-    if (touchSensor.m_overCurrentFault)
-        console.log("Over Current Fault detected!");
-}
 
 // Будем вызывать функцию через каждые 100 мс
 setInterval(periodicLightActivity, 50);
@@ -188,6 +206,7 @@ function periodicLightActivity() {
 }
 
 function periodicBuzzerActivity(manual) {
+    //manual = 0;
     if ((manual === null) && (manual === undefined)) {
         myBuzzer.write(buzzerState ? 1 : 0); // установим сигнал по состоянию
         //buzzerState = !buzzerState; // изменим состояние на обратное
@@ -209,6 +228,62 @@ var exit = function (process) {
 //    exit(process);
 //});
 
-process.on('exit', function () {
+/*process.on('exit', function () {
     exit(process);
+});*/
+
+
+
+var connectedUsersArray = [];
+var userId;
+
+app.get('/', function (req, res) {
+    //Join all arguments together and normalize the resulting path.
+    res.sendFile(path.join(__dirname + '/client', 'index.html'));
+});
+
+//Allow use of files in client folder
+app.use(express.static(__dirname + '/client'));
+app.use('/client', express.static(__dirname + '/client'));
+
+//Socket.io Event handlers
+io.on('connection', function (socket) {
+    console.log("\n Add new User: u" + connectedUsersArray.length);
+    if (connectedUsersArray.length > 0) {
+        var element = connectedUsersArray[connectedUsersArray.length - 1];
+        userId = 'u' + (parseInt(element.replace("u", "")) + 1);
+    }
+    else {
+        userId = "u0";
+    }
+    console.log('a user connected: ' + userId);
+    io.emit('user connect', userId);
+    connectedUsersArray.push(userId);
+    console.log('Number of Users Connected ' + connectedUsersArray.length);
+    console.log('User(s) Connected: ' + connectedUsersArray);
+    io.emit('connected users', connectedUsersArray);
+
+    socket.on('user disconnect', function (msg) {
+        console.log('remove: ' + msg);
+        connectedUsersArray.splice(connectedUsersArray.lastIndexOf(msg), 1);
+        io.emit('user disconnect', msg);
+    });
+
+    socket.on('chat message', function (msg) {
+        io.emit('chat message', msg);
+        console.log('message: ' + msg.value);
+    });
+
+    socket.on('toogle led', function (msg) {
+        //myOnboardLed.write(ledState ? 1 : 0); //if ledState is true then write a '1' (high) otherwise write a '0' (low)
+        msg.value = ledState;
+        io.emit('toogle led', msg);
+        ledState = !ledState; //invert the ledState
+    });
+
+});
+
+
+http.listen(3000, function () {
+    console.log('Web server Active listening on *:3000');
 });
