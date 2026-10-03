@@ -17,7 +17,7 @@ var Q = require('q');
  * made available for convenience in your
  * changes
  */
-lcd = {
+var lcd = {
     lcdAddress:0x3E,
     rgbAddress:0x62,
     clearDisplay: 0x01,
@@ -128,10 +128,6 @@ exports.LCD.prototype = {
             self._exec();
         }
 
-        if (this._queue.length === 0) {
-            this._busy = false; // needed if last thing we do is a wait
-            return;
-        }
         if (this._error || this._busy) {
             return;
         }
@@ -139,7 +135,7 @@ exports.LCD.prototype = {
         var status;
         
         while (this._queue.length > 0) {
-            next = this._queue.shift();
+            var next = this._queue.shift();
             if (next.wait) {
               setTimeout(reexec, (next.wait / 1000));
               return;
